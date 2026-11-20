@@ -3,35 +3,18 @@
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { useEffect, useState } from "react";
-import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { Circle, CircleMarker, MapContainer, Marker, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { poleIcon } from "@/lib/poleIcon";
+import { TILES } from "@/lib/mapTiles";
 
 export interface LatLng {
   lat: number;
   lng: number;
 }
 
-const TILES = {
-  street: {
-    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    maxNativeZoom: 20,
-  },
-  satellite: {
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics",
-    maxNativeZoom: 19,
-  },
-} as const;
 
-// CSS pin instead of Leaflet's default PNG icon (those break under bundlers)
-const PIN = L.divIcon({
-  className: "",
-  html: `<div style="position:relative;width:28px;height:28px;transform:translate(-14px,-28px)">
-    <svg viewBox="0 0 24 24" width="28" height="28" fill="#f5b301" stroke="#111" stroke-width="1.5">
-      <path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.6" fill="#111"/>
-    </svg></div>`,
-  iconSize: [0, 0],
-});
+// Vector utility pole, anchored at its base (where it meets the ground)
+const PIN = poleIcon("#f5b301", 36);
 
 /**
  * Reads coordinates out of pasted text:
@@ -75,10 +58,12 @@ function FollowValue({ value }: { value: LatLng | null }) {
 
 export default function LocationPicker({
   value,
+  live,
   center,
   onChange,
 }: {
   value: LatLng | null;
+  live?: (LatLng & { acc: number }) | null; // where the phone is right now (blue dot)
   center: [number, number];
   onChange: (p: LatLng) => void;
 }) {
@@ -106,9 +91,15 @@ export default function LocationPicker({
     <div className="space-y-3">
       <div className="relative h-72 overflow-hidden rounded-xl border border-ims-line sm:h-80">
         <MapContainer center={value ? [value.lat, value.lng] : center} zoom={value ? 19 : 16} maxZoom={21} className="h-full w-full">
-          <TileLayer key={layer} url={tiles.url} attribution={tiles.attribution} maxNativeZoom={tiles.maxNativeZoom} maxZoom={21} />
+          <TileLayer key={layer} url={tiles.url} attribution={tiles.attribution} maxNativeZoom={tiles.maxNativeZoom} maxZoom={21} className={tiles.className} />
           <ClickToPlace onPick={onChange} />
-          <FollowValue value={value} />
+          <FollowValue value={value ?? live ?? null} />
+          {live && (
+            <>
+              <Circle center={[live.lat, live.lng]} radius={live.acc} pathOptions={{ color: "#38bdf8", weight: 1, fillOpacity: 0.1, interactive: false }} />
+              <CircleMarker center={[live.lat, live.lng]} radius={6} pathOptions={{ color: "#fff", weight: 2, fillColor: "#0ea5e9", fillOpacity: 1, interactive: false }} />
+            </>
+          )}
           {value && (
             <Marker
               position={[value.lat, value.lng]}

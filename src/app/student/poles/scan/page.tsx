@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Camera, MapPin, Sparkles, Zap, Flame, CheckCircle2, Loader2, LocateFixed, ImagePlus,
@@ -68,7 +68,17 @@ async function shrinkForAI(file: File, max = 1600): Promise<Blob> {
   }
 }
 
-const KVA_OPTIONS = ["5", "10", "15", "25", "37.5", "50", "75", "100", "167"];
+type Fix = { lat: number; lng: number; acc: number; at: number };
+type Loc = { lat: number; lng: number; acc: number | null; source: "photo" | "exif" | "gps" | "map" };
+
+const LOC_LABEL: Record<Loc["source"], string> = {
+  photo: "Pinned where the photo was taken",
+  exif: "From the photo's GPS tag",
+  gps: "From your GPS",
+  map: "Pinned on the map",
+};
+
+const KVA_OPTIONS =["5", "10", "15", "25", "37.5", "50", "75", "100", "167"];
 
 function Step({ n, title, done, children }: { n: number; title: string; done: boolean; children: React.ReactNode }) {
   return (
@@ -90,8 +100,13 @@ export default function ScanPage() {
 
   const [photo, setPhoto] = useState<string | null>(null);
   const [rawFile, setRawFile] = useState<File | null>(null);
-  const [loc, setLoc] = useState<{ lat: number; lng: number; acc: number | null; source: "gps" | "map" } | null>(null);
+  const [loc, setLoc] = useState<Loc | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
+  // live GPS, tracked continuously so a fix is ready the moment a photo is taken
+  const [live, setLive] = useState<Fix | null>(null);
+  const liveRef = useRef<Fix | null>(null);
+  const waitingForFix = useRef(false); // photo taken before GPS had a fix: pin on the next one
+  const locTouched = useRef(false); // student moved the pin by hand: don't overwrite it
   const [locState, setLocState] = useState<"idle" | "busy" | "error">("idle");
   const [locError, setLocError] = useState("");
   const [detecting, setDetecting] = useState(false);
@@ -122,10 +137,79 @@ export default function ScanPage() {
 
   const conf = (label: string) => detections?.find((d) => d.label === label)?.confidence;
 
+  function gpsErrorText(err: GeolocationPositionError) {
+    if (!window.isSecureContext) return "Phones only allow GPS on https:// pages. Open the app's https link, or pick the pole on the map.";
+    if (err.code === 1) return "Location permission was denied. Allow it in the browser settings, or pick the pole on the map.";
+    return "Couldn't get a GPS fix. Step outside and wait a moment, or pick the pole on the map.";
+  }
+
+  // Start tracking GPS as soon as the scanner opens
+  useEffect(() => {
+    if (!("geolocation" in navigator) || !window.isSecureContext) return;
+    const id = navigator.geolocation.watchPosition(
+      (pos) => {
+        const fix: Fix = { lat: pos.coords.latitude, lng: pos.coords.longitude, acc: Math.round(pos.coords.accuracy), at: pos.timestamp };
+        liveRef.current = fix;
+        setLive(fix);
+        if (waitingForFix.current && !locTouched.current) {
+          waitingForFix.current = false;
+          setLoc({ lat: fix.lat, lng: fix.lng, acc: fix.acc, source: "photo" });
+          setLocState("idle");
+          setErrors((e) => ({ ...e, loc: "" }));
+        }
+      },
+      (err) => {
+        if (waitingForFix.current) {
+          waitingForFix.current = false;
+          setLocState("error");
+          setLocError(gpsErrorText(err));
+        }
+      },
+      { enableHighAccuracy: true, maximumAge: 5000 },
+    );
+    return () => navigator.geolocation.clearWatch(id);
+  }, []);
+
+  /** Pin the pole where the photo was taken. */
+  async function pinFromPhoto(f: File) {
+    locTouched.current = false;
+    setMapOpen(true);
+    // 1) GPS tag saved inside the photo (gallery photos, some camera apps)
+    try {
+      const { gps } = await import("exifr");
+      const g = await gps(f);
+      if (g && Number.isFinite(g.latitude) && Number.isFinite(g.longitude) && (g.latitude !== 0 || g.longitude !== 0)) {
+        setLoc({ lat: g.latitude, lng: g.longitude, acc: null, source: "exif" });
+        setLocState("idle");
+        setErrors((e) => ({ ...e, loc: "" }));
+        return;
+      }
+    } catch {
+      // no EXIF or unreadable: fall through to live GPS
+    }
+    // 2) live GPS fix from right now
+    const fix = liveRef.current;
+    if (fix && Date.now() - fix.at < 30_000) {
+      setLoc({ lat: fix.lat, lng: fix.lng, acc: fix.acc, source: "photo" });
+      setLocState("idle");
+      setErrors((e) => ({ ...e, loc: "" }));
+      return;
+    }
+    // 3) no fresh fix yet: pin on the next one the watcher gets
+    if ("geolocation" in navigator && window.isSecureContext) {
+      waitingForFix.current = true;
+      setLocState("busy");
+    } else {
+      setLocState("error");
+      setLocError("Phones only allow GPS on https:// pages. Open the app's https link, or pick the pole on the map.");
+    }
+  }
+
   async function onPhoto(f: File | undefined) {
     if (!f) return;
     setErrors((e) => ({ ...e, photo: "" }));
     setRawFile(f);
+    void pinFromPhoto(f);
     setPhoto(await downscale(f));
     setDetections(null);
     setAiInfo(null);
@@ -148,13 +232,7 @@ export default function ScanPage() {
       },
       (err) => {
         setLocState("error");
-        setLocError(
-          !window.isSecureContext
-            ? "Phones only allow GPS on https:// pages. Open the app's https link, or pick the pole on the map."
-            : err.code === 1
-              ? "Location permission was denied. Allow it in the browser settings, or pick the pole on the map."
-              : "Couldn't get a GPS fix. Step outside and try again, or pick the pole on the map.",
-        );
+        setLocError(gpsErrorText(err));
         setMapOpen(true);
       },
       { enableHighAccuracy: true, timeout: 15000 },
@@ -162,6 +240,8 @@ export default function ScanPage() {
   }
 
   function pinOnMap(p: { lat: number; lng: number }) {
+    locTouched.current = true;
+    waitingForFix.current = false;
     setLoc({ lat: p.lat, lng: p.lng, acc: null, source: "map" });
     setLocState("idle");
     setErrors((e) => ({ ...e, loc: "" }));
@@ -239,7 +319,8 @@ export default function ScanPage() {
   }
 
   function reset() {
-    setPhoto(null); setRawFile(null); setLoc(null); setMapOpen(false); setDetections(null); setAiInfo(null); setAiError(""); setPoleNumber("");
+    setPhoto(null); setRawFile(null); setLoc(null); setMapOpen(false); setLocState("idle");
+    waitingForFix.current = false; locTouched.current = false; setDetections(null); setAiInfo(null); setAiError(""); setPoleNumber("");
     setMaterial("Concrete"); setHeightFt(35); setLineType("Primary + Secondary"); setKva("none");
     setAttachments([]); setCondition("Good"); setNotes(""); setErrors({}); setSubmitted(null);
     if (fileRef.current) fileRef.current.value = "";
@@ -305,8 +386,9 @@ export default function ScanPage() {
                   <div>
                     <p className="font-mono text-sm text-white">{loc.lat.toFixed(6)}, {loc.lng.toFixed(6)}</p>
                     <p className="text-xs text-ims-muted">
-                      {loc.source === "gps" ? `GPS accuracy ±${loc.acc} m` : "Pinned on the map"}
-                      {loc.source === "gps" && (loc.acc ?? 0) > 15 && " (rough: drag the pin onto the pole)"}
+                      {LOC_LABEL[loc.source]}
+                      {loc.acc != null && ` · ±${loc.acc} m`}
+                      {loc.acc != null && loc.acc > 15 && " (rough: drag the pole onto the right spot)"}
                     </p>
                   </div>
                 </div>
@@ -320,24 +402,36 @@ export default function ScanPage() {
                 </div>
               </div>
             ) : (
+              <div className="space-y-3">
+                <p className="flex items-center gap-2 text-sm text-ims-muted">
+                  {locState === "busy" ? (
+                    <><Loader2 className="h-4 w-4 animate-spin text-ims-amber" /> Waiting for a GPS fix to pin the pole...</>
+                  ) : live ? (
+                    <><span className="relative flex h-2.5 w-2.5"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75" /><span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-sky-400" /></span>
+                    GPS live (±{live.acc} m). The pole is pinned automatically when you take the photo.</>
+                  ) : (
+                    <>The pole is pinned automatically where you take the photo.</>
+                  )}
+                </p>
               <div className="flex flex-wrap gap-2">
                 <button onClick={getLocation} disabled={locState === "busy"} className="btn-amber flex items-center gap-2 px-4 py-2.5 disabled:opacity-60">
                   {locState === "busy" ? <Loader2 className="h-4 w-4 animate-spin" /> : <LocateFixed className="h-4 w-4" />}
-                  {locState === "busy" ? "Getting GPS fix..." : "Use my GPS location"}
+                  {locState === "busy" ? "Getting GPS fix..." : "Pin at my location now"}
                 </button>
                 <button onClick={() => setMapOpen((o) => !o)} className="btn-ghost flex items-center gap-2 px-4 py-2.5 text-sm">
                   <MapIcon className="h-4 w-4" /> {mapOpen ? "Hide map" : "Pick on map"}
                 </button>
               </div>
+              </div>
             )}
             {mapOpen && (
               <div className="mt-3">
-                <LocationPicker value={loc} center={MAP_CENTER} onChange={pinOnMap} />
+                <LocationPicker value={loc} live={live} center={MAP_CENTER} onChange={pinOnMap} />
               </div>
             )}
             {locState === "error" && <p className="mt-2 text-sm text-amber-300">{locError}</p>}
             {errors.loc && <p className="mt-2 text-sm text-red-400">{errors.loc}</p>}
-            <p className="mt-3 text-xs text-ims-muted">Stand right beside the pole when capturing so the pin lands on it.</p>
+            <p className="mt-3 text-xs text-ims-muted">Take the photo standing right beside the pole so the pin lands on it.</p>
           </Step>
 
           <Step n={3} title="Check the specs" done={!!poleNumber && !!detections}>

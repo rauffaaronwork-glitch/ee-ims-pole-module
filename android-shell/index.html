@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Pole Scanner</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0e0e11; color: #e5e7eb;
+           font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; padding: 24px; }
+    main { width: 100%; max-width: 380px; text-align: center; }
+    img { width: 88px; height: 88px; border-radius: 22px; }
+    h1 { font-size: 22px; margin: 14px 0 4px; color: #fff; }
+    p { margin: 0 0 18px; color: #9ca3af; font-size: 14px; }
+    label { display: block; text-align: left; font-size: 13px; color: #9ca3af; margin-bottom: 6px; }
+    input { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid #2a2d36; background: #16181e; color: #fff; font-size: 15px; }
+    button { width: 100%; margin-top: 12px; padding: 13px; border: 0; border-radius: 12px; font-weight: 700; font-size: 15px; }
+    .go { background: #f5b301; color: #111; }
+    .ghost { background: transparent; color: #9ca3af; border: 1px solid #2a2d36; }
+    .err { color: #fca5a5; font-size: 13px; margin-top: 10px; min-height: 1em; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+<main>
+  <img src="icon.png" alt="" />
+  <h1>Pole Scanner</h1>
+
+  <section id="opening" class="hidden">
+    <p>Opening <span id="host"></span>…</p>
+    <button class="ghost" id="change">Change server</button>
+  </section>
+
+  <section id="setup" class="hidden">
+    <p>Enter the app's https link from your instructor (e.g. the Vercel or tunnel link).</p>
+    <label for="url">Server link</label>
+    <input id="url" type="url" inputmode="url" placeholder="https://…" autocomplete="off" />
+    <button class="go" id="save">Open</button>
+    <div class="err" id="err"></div>
+  </section>
+</main>
+<script>
+  // The APK is a wrapper: the app itself is served from this link, so the
+  // same APK keeps working when the server moves (tunnel restart, Vercel...).
+  const KEY = "pole-server-url";
+  const DEFAULT = "__DEFAULT_SERVER__"; // filled in at build time (may be empty)
+  const START = "/student/poles/scan";
+  const $ = (id) => document.getElementById(id);
+
+  function normalise(v) {
+    v = (v || "").trim().replace(/\/+$/, "");
+    if (v && !/^https?:\/\//i.test(v)) v = "https://" + v;
+    try { const u = new URL(v); return u.protocol === "https:" ? u.origin : null; } catch { return null; }
+  }
+  function open(origin) { location.replace(origin + START); }
+  function showSetup(prefill) {
+    $("opening").classList.add("hidden");
+    $("setup").classList.remove("hidden");
+    $("url").value = prefill || "";
+  }
+
+  let timer;
+  const saved = normalise(localStorage.getItem(KEY)) || normalise(DEFAULT.startsWith("__") ? "" : DEFAULT);
+  if (saved && !location.hash.includes("setup")) {
+    $("host").textContent = new URL(saved).host;
+    $("opening").classList.remove("hidden");
+    timer = setTimeout(() => open(saved), 1200);
+  } else {
+    showSetup(saved);
+  }
+
+  $("change").onclick = () => { clearTimeout(timer); showSetup(saved); };
+  $("save").onclick = async () => {
+    const origin = normalise($("url").value);
+    if (!origin) { $("err").textContent = "Use the full https:// link. GPS only works on https."; return; }
+    $("err").textContent = "Checking…";
+    try {
+      await fetch(origin + "/manifest.webmanifest", { mode: "no-cors", cache: "no-store" });
+    } catch {
+      $("err").textContent = "Can't reach that link. Check it and your internet connection.";
+      return;
+    }
+    localStorage.setItem(KEY, origin);
+    open(origin);
+  };
+  $("url").addEventListener("keydown", (e) => e.key === "Enter" && $("save").click());
+</script>
+</body>
+</html>

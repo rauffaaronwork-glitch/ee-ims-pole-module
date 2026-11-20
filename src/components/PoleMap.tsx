@@ -2,7 +2,9 @@
 
 import "leaflet/dist/leaflet.css";
 import { useEffect } from "react";
-import { MapContainer, TileLayer, CircleMarker, Tooltip, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Tooltip, useMap } from "react-leaflet";
+import { poleIcon } from "@/lib/poleIcon";
+import { TILES } from "@/lib/mapTiles";
 import type { Pole } from "@/lib/types";
 import { STATUS_META } from "@/lib/store";
 import { MAP_CENTER } from "@/lib/mock";
@@ -28,29 +30,27 @@ export default function PoleMap({
   return (
     <MapContainer center={MAP_CENTER} zoom={15} scrollWheelZoom className="h-full w-full">
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+        attribution={TILES.street.attribution}
+        url={TILES.street.url}
+        maxNativeZoom={TILES.street.maxNativeZoom}
+        maxZoom={20}
+        className={TILES.street.className}
       />
       {poles.map((p) => {
         const isSel = p.id === selectedId;
         return (
-          <CircleMarker
+          <Marker
             key={p.id}
-            center={[p.lat, p.lng]}
-            radius={isSel ? 11 : p.transformerKVA ? 8 : 6}
-            pathOptions={{
-              color: isSel ? "#ffffff" : STATUS_META[p.status].color,
-              weight: isSel ? 3 : 1.5,
-              fillColor: STATUS_META[p.status].color,
-              fillOpacity: 0.85,
-            }}
+            position={[p.lat, p.lng]}
+            icon={poleIcon(STATUS_META[p.status].color, isSel ? 34 : p.transformerKVA ? 24 : 20, isSel ? "#ffffff" : "#111")}
+            zIndexOffset={isSel ? 1000 : 0}
             eventHandlers={{ click: () => onSelect(p.id) }}
           >
-            <Tooltip direction="top" offset={[0, -6]}>
+            <Tooltip direction="top">
               <span className="font-mono">{p.poleNumber}</span>
               {p.transformerKVA ? ` · ${p.transformerKVA} kVA` : ""}
             </Tooltip>
-          </CircleMarker>
+          </Marker>
         );
       })}
       <FlyTo pole={selected} />
