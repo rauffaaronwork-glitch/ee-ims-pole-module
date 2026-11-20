@@ -1,0 +1,15 @@
+crossarm
+pin_insulator
+suspension_insulator
+fuse_cutout
+lightning_arrester
+distribution_transformer
+streetlight
+guy_wire
+service_drop
+kwh_meter_cluster
+pole_concrete
+pole_steel
+pole_wood
+pole_number_tag
+kva_marking

@@ -1,26 +1,84 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* EE-IMS look: near-black navy background, amber accent, rounded dark cards */
+@theme {
+  --color-ims-bg: #0e0e11;
+  --color-ims-panel: #14161b;
+  --color-ims-card: #1a1c22;
+  --color-ims-card2: #20232a;
+  --color-ims-line: #2a2d36;
+  --color-ims-amber: #fbbf24;
+  --color-ims-amber2: #f59e0b;
+  --color-ims-muted: #9ca3af;
+  --color-ims-green: #10b981;
+  --color-ims-red: #ef4444;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  background: #0e0e11;
+  color: #e5e7eb;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-image: radial-gradient(1200px 600px at 70% -10%, #1b2436 0%, transparent 60%);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+.card {
+  background: var(--color-ims-card);
+  border: 1px solid var(--color-ims-line);
+  border-radius: 14px;
+}
+
+.btn-amber {
+  background: var(--color-ims-amber);
+  color: #1a1206;
+  font-weight: 600;
+  border-radius: 10px;
+}
+.btn-amber:hover {
+  background: var(--color-ims-amber2);
+}
+.btn-ghost {
+  border: 1px solid var(--color-ims-line);
+  border-radius: 10px;
+  color: #e5e7eb;
+}
+.btn-ghost:hover {
+  background: var(--color-ims-card2);
+}
+
+.input {
+  background: var(--color-ims-panel);
+  border: 1px solid var(--color-ims-line);
+  border-radius: 10px;
+  padding: 0.55rem 0.75rem;
+  color: #e5e7eb;
+  width: 100%;
+}
+.input:focus {
+  outline: none;
+  border-color: var(--color-ims-amber);
+}
+
+.leaflet-container {
+  background: #0e0e11 !important;
+  border-radius: 14px;
+  font-family: inherit;
+}
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: #1a1c22;
+  color: #e5e7eb;
+  border: 1px solid #2a2d36;
+}
+.leaflet-control-attribution {
+  background: rgba(14, 14, 17, 0.75) !important;
+  color: #9ca3af !important;
+}
+.leaflet-control-attribution a {
+  color: #fbbf24 !important;
 }

@@ -1,0 +1,58 @@
+// Pole module tables for EE-IMS (handoff file, not wired up in the prototype).
+// Merge these two models into EE-IMS's existing schema and point `surveyedBy`
+// / `reviewedBy` at EE-IMS's real User model. If EE-IMS doesn't use Prisma,
+// translate these into its database tool (Drizzle, Supabase SQL, etc.).
+
+enum PoleStatus {
+  PENDING
+  VERIFIED
+  NEEDS_REPAIR
+  REJECTED
+}
+
+enum PoleMaterial {
+  CONCRETE
+  STEEL
+  WOOD
+}
+
+model Pole {
+  id             String       @id @default(cuid())
+  poleNumber     String       @unique // stenciled number, read by OCR
+  latitude       Float
+  longitude      Float
+  material       PoleMaterial
+  heightFt       Int?
+  lineType       String?      // Primary / Secondary / Primary + Secondary
+  transformerKva Float?
+  attachments    String[]     // Crossarm, Fuse cutout, Lightning arrester, ...
+  condition      String       @default("Good")
+  status         PoleStatus   @default(PENDING)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  surveys        PoleSurvey[]
+
+  @@index([latitude, longitude])
+  @@index([status])
+}
+
+// One row per scan, so a pole can be re-surveyed over time (condition history)
+model PoleSurvey {
+  id           String     @id @default(cuid())
+  poleId       String
+  pole         Pole       @relation(fields: [poleId], references: [id], onDelete: Cascade)
+  photoUrl     String     // file storage URL (e.g. Vercel Blob), never the image itself
+  gpsAccuracyM Float?
+  aiResult     Json?      // raw detections from the AI service
+  aiConfidence Float?
+  notes        String?
+  surveyedById String     // -> EE-IMS User.id
+  reviewedById String?    // -> EE-IMS User.id (faculty)
+  reviewNote   String?
+  status       PoleStatus @default(PENDING)
+  xpAwarded    Int        @default(0)
+  createdAt    DateTime   @default(now())
+
+  @@index([surveyedById])
+  @@index([status])
+}

@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# pole AI service
+ai-service/.venv/
+ai-service/runs/
+ai-service/models/*.pt
+ai-service/__pycache__/
+*.pt

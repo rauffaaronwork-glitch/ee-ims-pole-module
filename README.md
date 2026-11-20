@@ -1,36 +1,73 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# EE-IMS Pole Mapping Module (prototype)
 
-## Getting Started
+A working prototype of the **electric pole scanning and mapping** module for
+EE-IMS (Integrated Management System, CSU Carig College of Engineering and
+Architecture). It copies EE-IMS's look (dark theme, amber accent, XP system)
+so it can be shown to the adviser and the EE-IMS maintainer, then merged in.
 
-First, run the development server:
+## Screens
+
+| Page | Route | Who |
+|---|---|---|
+| Pole Scanner | `/student/poles/scan` | Students: photo, GPS, AI detection, specs, submit (+XP) |
+| Pole Map | `/poles/map` | Everyone: map of poles, filters, details, CSV export |
+| Pole Review | `/admin/poles` | Faculty: verify, flag for repair, or reject |
+
+## Run it
+
+Requires Node.js 20 or newer.
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000. To test the camera and GPS on a phone, deploy it to
+Vercel (free) and open the link on the phone. Browsers only allow camera/GPS on
+HTTPS or localhost.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## What is real and what is simulated
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Part | Status |
+|---|---|
+| Layout, styling, navigation | Real |
+| Camera capture, photo downscaling | Real |
+| GPS location (with accuracy) | Real |
+| Map with pins, filters, CSV export | Real (OpenStreetMap/CARTO tiles, free) |
+| Faculty review flow, XP rules, quick-check question | Real UI logic |
+| **AI detection** (`/api/poles/detect`) | **Real** when `POLE_AI_URL` points at `ai-service/` (YOLO + OCR). Pole number/kVA OCR works now; part detection needs a trained model. Without `POLE_AI_URL` it falls back to simulated demo data |
+| **Data storage** | **Browser only** (localStorage) so the demo works without a database |
+| Sample poles | Fake data, scattered around a sample area in Tuguegarao. Not real poles |
 
-## Learn More
+## Moving it into EE-IMS (for the maintainer)
 
-To learn more about Next.js, take a look at the following resources:
+1. Copy `src/app/student/poles`, `src/app/poles`, `src/app/admin/poles`,
+   `src/app/api/poles`, `src/components/Pole*.tsx`, and `src/lib/types.ts`.
+2. Skip `AppShell.tsx` and `PageHeader.tsx`: EE-IMS has its own layout.
+   Just add the "Field Work" links to its existing sidebar.
+3. Merge `prisma/schema.prisma` into EE-IMS's database schema, and link
+   `surveyedById` / `reviewedById` to the real User table.
+4. Replace `src/lib/store.ts` calls (`usePoles`, `addPole`, `updatePole`) with
+   fetches to `/api/poles`, and make that route read/write the database using
+   EE-IMS's existing login check.
+5. Upload photos to file storage (e.g. Vercel Blob) and save only the URL.
+6. Award XP through EE-IMS's existing XP logic.
+7. Protect `/admin/poles` so only faculty can open it.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Connecting the real AI
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The service is in [`ai-service/`](ai-service/README.md): Python FastAPI with
+- a **YOLO** model trained on labeled photos of local poles (crossarm,
+  insulators, fuse cutout, arrester, transformer, streetlight, guy wire, ...)
+- **OCR** (EasyOCR) for the stenciled pole number and transformer kVA marking
 
-## Deploy on Vercel
+Run it, put `POLE_AI_URL=http://127.0.0.1:8000` in `.env.local`, and restart
+`npm run dev`. See `ai-service/README.md` for labeling and training.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Dataset tip: label a few hundred to a thousand+ photos in Roboflow, taken in
+different light and angles. Compare AI results against manual checks during
+the campus pilot; that accuracy comparison is good results data.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Safety
+
+Surveys are from ground level only. No climbing or touching poles.
