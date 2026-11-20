@@ -26,6 +26,27 @@ Open http://localhost:3000. To test the camera and GPS on a phone, deploy it to
 Vercel (free) and open the link on the phone. Browsers only allow camera/GPS on
 HTTPS or localhost.
 
+## Install it as an app
+
+**Phone home screen (PWA):** open the https link in Chrome (Android) and tap
+**Install**, or in Safari (iPhone) tap Share → **Add to Home Screen**. Needs
+https: a tunnel link or a hosted (Vercel) link, not `http://192.168…`.
+
+**Android APK:** `android/` is a Capacitor wrapper that opens the hosted app
+in a full-screen app with camera and GPS permissions. On first launch it asks
+for the server's https link and remembers it (tap "Change server" while it
+opens to switch). To rebuild it (Java 21 and the Android SDK required):
+
+```bash
+npx cap sync android
+cd android
+./gradlew assembleDebug        # -> app/build/outputs/apk/debug/app-debug.apk
+```
+
+`android/local.properties` must point `sdk.dir` at your Android SDK. The
+debug APK is for testing (install with "allow unknown apps"); a Play Store
+release needs a signed `assembleRelease` build.
+
 ## What is real and what is simulated
 
 | Part | Status |
